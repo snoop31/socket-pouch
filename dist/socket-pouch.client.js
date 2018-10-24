@@ -135,6 +135,7 @@ var readAsBinaryString = _dereq_('./readAsBinaryString');
 var isBinaryObject = _dereq_('../shared/isBinaryObject');
 var Promise = _dereq_('pouchdb-promise');
 var base64 = _dereq_('./base64');
+var reconnect = _dereq_('engine.io-reconnect');
 
 var instances = {};
 
@@ -219,15 +220,10 @@ function SocketPouch(opts, callback) {
     // to force XHR during debugging
     // opts.socketOptions = {transports: ['polling']};
     var socket = api._socket = new Socket(opts.url, opts.socketOptions || {});
-    socket.binaryType = 'blob';
-    api._callbacks = {};
-    api._changesListeners = {};
-    api._blobs = {};
-    api._binaryMessages = {};
-    api._name = api._socketName;
-    instances[cacheKey] = api;
+    var io = reconnect(socket);
 
-    socket.once('open', function () {
+    function doinit() {
+      console.log('doinit');
       api._socketId = socket.id;
       log('socket opened', api._socketId, api._name);
       var serverOpts = {
@@ -243,6 +239,35 @@ function SocketPouch(opts, callback) {
         }
         callback(null, api);
       });
+    }
+
+    io.on('reconnect', function(attempts) {
+      console.log('Reconnected after %d attempts', attempts);
+      doinit();
+    });
+
+    io.on('reconnecting', function(attempts) {
+      console.log('Trying to reconnect after %d attempts', attempts);
+    });
+
+    io.on('reconnect_error', function(error) {
+      console.log('Error trying to reconnect', error);
+    });
+
+    io.on('reconnect_timeout', function(timeout) {
+      console.log('Timeout after %dms', timeout);
+    });
+
+    socket.binaryType = 'blob';
+    api._callbacks = {};
+    api._changesListeners = {};
+    api._blobs = {};
+    api._binaryMessages = {};
+    api._name = api._socketName;
+    instances[cacheKey] = api;
+
+    socket.once('open', function(){
+      doinit();
     });
 
     api._socket.once('error', function (err) {
@@ -776,7 +801,7 @@ if (typeof window !== 'undefined' && window.PouchDB) {
 }
 
 }).call(this,_dereq_('_process'))
-},{"../shared/buffer":11,"../shared/errors":13,"../shared/isBinaryObject":14,"../shared/utils":17,"./../shared/uuid":18,"./base64":3,"./readAsBinaryString":9,"./utils":10,"_process":71,"blob-util":22,"debug":27,"engine.io-client":29,"pouchdb-promise":69}],9:[function(_dereq_,module,exports){
+},{"../shared/buffer":11,"../shared/errors":13,"../shared/isBinaryObject":14,"../shared/utils":17,"./../shared/uuid":18,"./base64":3,"./readAsBinaryString":9,"./utils":10,"_process":74,"blob-util":23,"debug":28,"engine.io-client":30,"engine.io-reconnect":45,"pouchdb-promise":72}],9:[function(_dereq_,module,exports){
 'use strict';
 
 var arrayBufferToBinaryString = _dereq_('./arrayBufferToBinaryString');
@@ -918,7 +943,7 @@ exports.adapterFun = function adapterFun(name, callback) {
   }));
 };
 }).call(this,_dereq_('_process'))
-},{"../shared/utils":17,"./base64StringToBlobOrBuffer":4,"_process":71,"debug":27}],11:[function(_dereq_,module,exports){
+},{"../shared/utils":17,"./base64StringToBlobOrBuffer":4,"_process":74,"debug":28}],11:[function(_dereq_,module,exports){
 // hey guess what, we don't need this in the browser
 module.exports = {};
 },{}],12:[function(_dereq_,module,exports){
@@ -1212,7 +1237,7 @@ exports.generateErrorFromResponse = function (res) {
   return error;
 };
 
-},{"inherits":48}],14:[function(_dereq_,module,exports){
+},{"inherits":51}],14:[function(_dereq_,module,exports){
 'use strict';
 
 module.exports = function isBinaryObject(object) {
@@ -1408,7 +1433,7 @@ exports.readAsBinaryString = binUtil.readAsBinaryString;
 exports.binaryStringToArrayBuffer = binUtil.binaryStringToArrayBuffer;
 exports.arrayBufferToBinaryString = binUtil.arrayBufferToBinaryString;
 }).call(this,_dereq_('_process'))
-},{"./buffer":11,"./parse-message":15,"./pouchdb-clone":16,"_process":71,"inherits":48,"pouchdb-binary-util":68,"pouchdb-promise":69}],18:[function(_dereq_,module,exports){
+},{"./buffer":11,"./parse-message":15,"./pouchdb-clone":16,"_process":74,"inherits":51,"pouchdb-binary-util":71,"pouchdb-promise":72}],18:[function(_dereq_,module,exports){
 "use strict";
 
 // BEGIN Math.uuid.js
@@ -1624,6 +1649,32 @@ module.exports = function(arraybuffer, start, end) {
 })();
 
 },{}],22:[function(_dereq_,module,exports){
+
+/**
+ * Slice reference.
+ */
+
+var slice = [].slice;
+
+/**
+ * Bind `obj` to `fn`.
+ *
+ * @param {Object} obj
+ * @param {Function|String} fn or string
+ * @return {Function}
+ * @api public
+ */
+
+module.exports = function(obj, fn){
+  if ('string' == typeof fn) fn = obj[fn];
+  if ('function' != typeof fn) throw new Error('bind() requires a function');
+  var args = [].slice.call(arguments, 2);
+  return function(){
+    return fn.apply(obj, args.concat(slice.call(arguments)));
+  }
+};
+
+},{}],23:[function(_dereq_,module,exports){
 'use strict';
 
 /* jshint -W079 */
@@ -1948,7 +1999,7 @@ module.exports = {
   blobToArrayBuffer  : blobToArrayBuffer
 };
 
-},{"blob":23,"native-or-lie":64}],23:[function(_dereq_,module,exports){
+},{"blob":24,"native-or-lie":67}],24:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Create a blob builder even when vendor prefixes exist
@@ -2048,9 +2099,9 @@ module.exports = (function() {
 })();
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],24:[function(_dereq_,module,exports){
-
 },{}],25:[function(_dereq_,module,exports){
+
+},{}],26:[function(_dereq_,module,exports){
 
 /**
  * Expose `Emitter`.
@@ -2215,7 +2266,7 @@ Emitter.prototype.hasListeners = function(event){
   return !! this.listeners(event).length;
 };
 
-},{}],26:[function(_dereq_,module,exports){
+},{}],27:[function(_dereq_,module,exports){
 
 module.exports = function(a, b){
   var fn = function(){};
@@ -2223,7 +2274,7 @@ module.exports = function(a, b){
   a.prototype = new fn;
   a.prototype.constructor = a;
 };
-},{}],27:[function(_dereq_,module,exports){
+},{}],28:[function(_dereq_,module,exports){
 (function (process){
 /**
  * This is the web browser implementation of `debug()`.
@@ -2412,7 +2463,7 @@ function localstorage() {
 }
 
 }).call(this,_dereq_('_process'))
-},{"./debug":28,"_process":71}],28:[function(_dereq_,module,exports){
+},{"./debug":29,"_process":74}],29:[function(_dereq_,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -2616,11 +2667,11 @@ function coerce(val) {
   return val;
 }
 
-},{"ms":63}],29:[function(_dereq_,module,exports){
+},{"ms":66}],30:[function(_dereq_,module,exports){
 
 module.exports = _dereq_('./lib/index');
 
-},{"./lib/index":30}],30:[function(_dereq_,module,exports){
+},{"./lib/index":31}],31:[function(_dereq_,module,exports){
 
 module.exports = _dereq_('./socket');
 
@@ -2632,7 +2683,7 @@ module.exports = _dereq_('./socket');
  */
 module.exports.parser = _dereq_('engine.io-parser');
 
-},{"./socket":31,"engine.io-parser":42}],31:[function(_dereq_,module,exports){
+},{"./socket":32,"engine.io-parser":43}],32:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -3374,7 +3425,7 @@ Socket.prototype.filterUpgrades = function (upgrades) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./transport":32,"./transports/index":33,"component-emitter":25,"debug":39,"engine.io-parser":42,"indexof":47,"parsejson":65,"parseqs":66,"parseuri":67}],32:[function(_dereq_,module,exports){
+},{"./transport":33,"./transports/index":34,"component-emitter":26,"debug":40,"engine.io-parser":43,"indexof":50,"parsejson":68,"parseqs":69,"parseuri":70}],33:[function(_dereq_,module,exports){
 /**
  * Module dependencies.
  */
@@ -3533,7 +3584,7 @@ Transport.prototype.onClose = function () {
   this.emit('close');
 };
 
-},{"component-emitter":25,"engine.io-parser":42}],33:[function(_dereq_,module,exports){
+},{"component-emitter":26,"engine.io-parser":43}],34:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Module dependencies
@@ -3590,7 +3641,7 @@ function polling (opts) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling-jsonp":34,"./polling-xhr":35,"./websocket":37,"xmlhttprequest-ssl":38}],34:[function(_dereq_,module,exports){
+},{"./polling-jsonp":35,"./polling-xhr":36,"./websocket":38,"xmlhttprequest-ssl":39}],35:[function(_dereq_,module,exports){
 (function (global){
 
 /**
@@ -3825,7 +3876,7 @@ JSONPPolling.prototype.doWrite = function (data, fn) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":36,"component-inherit":26}],35:[function(_dereq_,module,exports){
+},{"./polling":37,"component-inherit":27}],36:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Module requirements.
@@ -4253,7 +4304,7 @@ function unloadHandler () {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./polling":36,"component-emitter":25,"component-inherit":26,"debug":39,"xmlhttprequest-ssl":38}],36:[function(_dereq_,module,exports){
+},{"./polling":37,"component-emitter":26,"component-inherit":27,"debug":40,"xmlhttprequest-ssl":39}],37:[function(_dereq_,module,exports){
 /**
  * Module dependencies.
  */
@@ -4500,7 +4551,7 @@ Polling.prototype.uri = function () {
   return schema + '://' + (ipv6 ? '[' + this.hostname + ']' : this.hostname) + port + this.path + query;
 };
 
-},{"../transport":32,"component-inherit":26,"debug":39,"engine.io-parser":42,"parseqs":66,"xmlhttprequest-ssl":38,"yeast":73}],37:[function(_dereq_,module,exports){
+},{"../transport":33,"component-inherit":27,"debug":40,"engine.io-parser":43,"parseqs":69,"xmlhttprequest-ssl":39,"yeast":76}],38:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -4789,7 +4840,7 @@ WS.prototype.check = function () {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../transport":32,"component-inherit":26,"debug":39,"engine.io-parser":42,"parseqs":66,"ws":24,"yeast":73}],38:[function(_dereq_,module,exports){
+},{"../transport":33,"component-inherit":27,"debug":40,"engine.io-parser":43,"parseqs":69,"ws":25,"yeast":76}],39:[function(_dereq_,module,exports){
 (function (global){
 // browser shim for xmlhttprequest module
 
@@ -4830,7 +4881,7 @@ module.exports = function (opts) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"has-cors":45}],39:[function(_dereq_,module,exports){
+},{"has-cors":48}],40:[function(_dereq_,module,exports){
 (function (process){
 
 /**
@@ -5011,7 +5062,7 @@ function localstorage(){
 }
 
 }).call(this,_dereq_('_process'))
-},{"./debug":40,"_process":71}],40:[function(_dereq_,module,exports){
+},{"./debug":41,"_process":74}],41:[function(_dereq_,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -5213,7 +5264,7 @@ function coerce(val) {
   return val;
 }
 
-},{"ms":41}],41:[function(_dereq_,module,exports){
+},{"ms":42}],42:[function(_dereq_,module,exports){
 /**
  * Helpers.
  */
@@ -5364,7 +5415,7 @@ function plural(ms, n, name) {
   return Math.ceil(ms / n) + ' ' + name + 's'
 }
 
-},{}],42:[function(_dereq_,module,exports){
+},{}],43:[function(_dereq_,module,exports){
 (function (global){
 /**
  * Module dependencies.
@@ -5977,7 +6028,7 @@ exports.decodePayloadAsBinary = function (data, binaryType, callback) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./keys":43,"after":19,"arraybuffer.slice":20,"base64-arraybuffer":21,"blob":23,"has-binary":44,"wtf-8":72}],43:[function(_dereq_,module,exports){
+},{"./keys":44,"after":19,"arraybuffer.slice":20,"base64-arraybuffer":21,"blob":24,"has-binary":47,"wtf-8":75}],44:[function(_dereq_,module,exports){
 
 /**
  * Gets the keys for an object.
@@ -5998,7 +6049,299 @@ module.exports = Object.keys || function keys (obj){
   return arr;
 };
 
-},{}],44:[function(_dereq_,module,exports){
+},{}],45:[function(_dereq_,module,exports){
+module.exports = _dereq_('./lib');
+},{"./lib":46}],46:[function(_dereq_,module,exports){
+/**
+ * Module dependencies.
+ */
+
+var debug = _dereq_('debug')('engine.io-reconnect');
+
+// Get bind component for node and browser.
+var bind = _dereq_('bind');
+
+/**
+ * Module exports.
+ */
+
+module.exports = Reconnect;
+
+/**
+ * `Reconnect` constructor.
+ *
+ * @param {Socket} engine instance
+ * @param {Object} options
+ * @api public
+ */
+
+function Reconnect(io, opts) {
+  if (!(this instanceof Reconnect)) return new Reconnect(io, opts);
+
+  opts = opts || {};
+  this.io = io;
+  this.attempt = 0;
+  this.timeoutTimer = null;
+  this.reconnectTimer = null;
+  this.attempts(opts.attempts || Infinity);
+  this.delay(opts.delay || 1000);
+  this.delayMax(opts.delayMax || 5000);
+  this.timeout(null == opts.timeout ? 10000 : opts.timeout);
+  this.reconnection(null == opts.reconnection ? true : opts.reconnection);
+
+  // we need to overwrite socket close method
+  this._close = this.io.close;
+
+  // bind events
+  this.bind();
+  this.connected = false;
+  this.times = 0;
+
+  // lets return the socket object
+  return this.io;
+}
+
+/**
+ * Bind `socket` events.
+ *
+ * @api private
+ */
+
+Reconnect.prototype.bind = function () {
+
+  debug('binding reconnect events and methods');
+
+  // avoid unnecessary binds
+  if (this.io.reconnect) return this;
+
+  // overwriting socket close method
+  this.io.close = bind(this, 'close');
+
+  // adding reconnect methods to socket
+  this.io.reconnect = bind(this, 'reconnect');
+  this.io.reconnection = bind(this, 'reconnection');
+  this.io.reconnectionDelay = bind(this, 'delay');
+  this.io.reconnectionDelayMax = bind(this, 'delayMax');
+  this.io.reconnectionTimeout = bind(this, 'timeout');
+  this.io.reconnectionAttempts = bind(this, 'attempts');
+
+  // caching event functions
+  this.onclose = bind(this, 'onclose');
+
+  // doing the actuall bind
+  this.io.on('close', this.onclose);
+};
+
+/**
+ * Close the current socket.
+ *
+ * @api private
+ */
+
+Reconnect.prototype.close = function () {
+  this.skip = true;
+  // lets return the original close output
+  return this._close.call(this.io);
+};
+
+/**
+ * Called upon engine close.
+ *
+ * @api private
+ */
+
+Reconnect.prototype.onclose = function (reason, desc) {
+  this.connected = false;
+  if (!this.skip && this._reconnection) {
+    this.reconnect();
+  } else {
+    this.clear();
+  }
+};
+
+/**
+ * Called upon connection error.
+ *
+ * @api private
+ */
+
+Reconnect.prototype.onerror = function (error) {
+  if (this.reconnecting) {
+    debug('reconnect attempt error');
+    this.reconnect();
+    this.io.emit('connect_error', error);
+  }
+  return this;
+};
+
+/**
+ * Clean timers.
+ *
+ * @api private
+ */
+
+Reconnect.prototype.clear = function () {
+  clearTimeout(this.reconnectTimer);
+  clearTimeout(this.timeoutTimer);
+  clearTimeout(this.checkTimer);
+  this.reconnectTimer = null;
+  this.timeoutTimer = null;
+  this.checkTimer = null;
+  return this;
+};
+
+/**
+ * Sets the `reconnection` config.
+ *
+ * @param {Boolean} true/false if it should automatically reconnect
+ * @return {Reconnect} self or value
+ * @api public
+ */
+
+Reconnect.prototype.reconnection = function (v) {
+  if (!arguments.length) return this._reconnection;
+  this._reconnection = !!v;
+  return this;
+};
+
+/**
+ * Sets the reconnection attempts config.
+ *
+ * @param {Number} max reconnection attempts before giving up
+ * @return {Reconnect} self or value
+ * @api public
+ */
+
+Reconnect.prototype.attempts = function (v) {
+  if (!arguments.length) return this._attempts;
+  this._attempts = v;
+  return this;
+};
+
+/**
+ * Sets the delay between reconnections.
+ *
+ * @param {Number} delay
+ * @return {Reconnect} self or value
+ * @api public
+ */
+
+Reconnect.prototype.delay = function (v) {
+  if (!arguments.length) return this._delay;
+  this._delay = v;
+  return this;
+};
+
+/**
+ * Sets the maximum delay between reconnections.
+ *
+ * @param {Number} delay
+ * @return {Reconnect} self or value
+ * @api public
+ */
+
+Reconnect.prototype.delayMax = function (v) {
+  if (!arguments.length) return this._delayMax;
+  this._delayMax = v;
+  return this;
+};
+
+/**
+ * Sets the connection timeout. `false` to disable
+ *
+ * @return {Reconnect} self or value
+ * @api public
+ */
+
+Reconnect.prototype.timeout = function (v) {
+  if (!arguments.length) return this._timeout;
+  this._timeout = v;
+  return this;
+};
+
+/**
+ * Attempt to re-open `socket` connection.
+ *
+ * @return {Reconnect} self
+ * @api private
+ */
+
+Reconnect.prototype.open = function(fn) {
+  this.io.open();
+  this.on('open', fn);
+  this.on('error', fn);
+
+  if (false !== this._timeout && !this.timeoutTimer) {
+    debug('connect attempt will timeout after %d', this._timeout);
+    this.timeoutTimer = setTimeout(bind(this, function () {
+      debug('connect attempt timed out after %d', this._timeout);
+      this.close();
+      this.clear();
+      this.io.emit('reconnect_timeout', this._timeout);
+    }), this._timeout);
+  }
+};
+
+/**
+ * Attempt a reconnection.
+ *
+ * @api private
+ */
+
+Reconnect.prototype.reconnect = function (){
+  this.attempt++;
+  this.io.emit('reconnecting', this.attempt);
+  if (this.attempt > this.attempts()) {
+    this.io.emit('reconnect_failed');
+    this.reconnecting = false;
+  } else {
+    var delay = this.attempt * this.delay();
+    debug('will wait %dms before reconnect attempt', delay);
+    this.reconnectTimer = setTimeout(bind(this, function() {
+      debug('attemptign reconnect');
+      this.open(bind(this, function(err){
+        if (err) {
+          debug('reconnect attempt error');
+          this.reconnect();
+          this.io.emit('reconnect_error', err);
+        } else {
+          debug('reconnect success');
+          this.onreconnect();
+        }
+      }));
+    }), delay);
+  }
+};
+
+/**
+ * Called upon successful reconnect.
+ *
+ * @api private
+ */
+
+Reconnect.prototype.onreconnect = function () {
+  var attempt = this.attempt;
+  this.clear();
+  this.attempt = 0;
+  this.reconnecting = false;
+  this.connected = true;
+  this.io.emit('reconnect', attempt);
+  return this;
+};
+
+/**
+ * Little helper for binding events.
+ *
+ * @api private
+ */
+
+Reconnect.prototype.on = function (ev, fn) {
+  this.io.off(ev, this['_'+ev]);
+  this.io.on(ev, this['_'+ev] = bind(this, fn));
+  return this;
+};
+
+},{"bind":22,"debug":28}],47:[function(_dereq_,module,exports){
 (function (global){
 
 /*
@@ -6061,7 +6404,7 @@ function hasBinary(data) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"isarray":49}],45:[function(_dereq_,module,exports){
+},{"isarray":52}],48:[function(_dereq_,module,exports){
 
 /**
  * Module exports.
@@ -6080,7 +6423,7 @@ try {
   module.exports = false;
 }
 
-},{}],46:[function(_dereq_,module,exports){
+},{}],49:[function(_dereq_,module,exports){
 (function (global){
 'use strict';
 var Mutation = global.MutationObserver || global.WebKitMutationObserver;
@@ -6153,7 +6496,7 @@ function immediate(task) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],47:[function(_dereq_,module,exports){
+},{}],50:[function(_dereq_,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -6164,7 +6507,7 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],48:[function(_dereq_,module,exports){
+},{}],51:[function(_dereq_,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -6189,18 +6532,18 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],49:[function(_dereq_,module,exports){
+},{}],52:[function(_dereq_,module,exports){
 module.exports = Array.isArray || function (arr) {
   return Object.prototype.toString.call(arr) == '[object Array]';
 };
 
-},{}],50:[function(_dereq_,module,exports){
+},{}],53:[function(_dereq_,module,exports){
 'use strict';
 
 module.exports = INTERNAL;
 
 function INTERNAL() {}
-},{}],51:[function(_dereq_,module,exports){
+},{}],54:[function(_dereq_,module,exports){
 'use strict';
 var Promise = _dereq_('./promise');
 var reject = _dereq_('./reject');
@@ -6244,7 +6587,7 @@ function all(iterable) {
     }
   }
 }
-},{"./INTERNAL":50,"./handlers":52,"./promise":54,"./reject":57,"./resolve":58}],52:[function(_dereq_,module,exports){
+},{"./INTERNAL":53,"./handlers":55,"./promise":57,"./reject":60,"./resolve":61}],55:[function(_dereq_,module,exports){
 'use strict';
 var tryCatch = _dereq_('./tryCatch');
 var resolveThenable = _dereq_('./resolveThenable');
@@ -6291,7 +6634,7 @@ function getThen(obj) {
   }
 }
 
-},{"./resolveThenable":59,"./states":60,"./tryCatch":61}],53:[function(_dereq_,module,exports){
+},{"./resolveThenable":62,"./states":63,"./tryCatch":64}],56:[function(_dereq_,module,exports){
 module.exports = exports = _dereq_('./promise');
 
 exports.resolve = _dereq_('./resolve');
@@ -6299,7 +6642,7 @@ exports.reject = _dereq_('./reject');
 exports.all = _dereq_('./all');
 exports.race = _dereq_('./race');
 
-},{"./all":51,"./promise":54,"./race":56,"./reject":57,"./resolve":58}],54:[function(_dereq_,module,exports){
+},{"./all":54,"./promise":57,"./race":59,"./reject":60,"./resolve":61}],57:[function(_dereq_,module,exports){
 'use strict';
 
 var unwrap = _dereq_('./unwrap');
@@ -6343,7 +6686,7 @@ Promise.prototype.then = function (onFulfilled, onRejected) {
   return promise;
 };
 
-},{"./INTERNAL":50,"./queueItem":55,"./resolveThenable":59,"./states":60,"./unwrap":62}],55:[function(_dereq_,module,exports){
+},{"./INTERNAL":53,"./queueItem":58,"./resolveThenable":62,"./states":63,"./unwrap":65}],58:[function(_dereq_,module,exports){
 'use strict';
 var handlers = _dereq_('./handlers');
 var unwrap = _dereq_('./unwrap');
@@ -6373,7 +6716,7 @@ QueueItem.prototype.otherCallRejected = function (value) {
   unwrap(this.promise, this.onRejected, value);
 };
 
-},{"./handlers":52,"./unwrap":62}],56:[function(_dereq_,module,exports){
+},{"./handlers":55,"./unwrap":65}],59:[function(_dereq_,module,exports){
 'use strict';
 var Promise = _dereq_('./promise');
 var reject = _dereq_('./reject');
@@ -6414,7 +6757,7 @@ function race(iterable) {
   }
 }
 
-},{"./INTERNAL":50,"./handlers":52,"./promise":54,"./reject":57,"./resolve":58}],57:[function(_dereq_,module,exports){
+},{"./INTERNAL":53,"./handlers":55,"./promise":57,"./reject":60,"./resolve":61}],60:[function(_dereq_,module,exports){
 'use strict';
 
 var Promise = _dereq_('./promise');
@@ -6426,7 +6769,7 @@ function reject(reason) {
 	var promise = new Promise(INTERNAL);
 	return handlers.reject(promise, reason);
 }
-},{"./INTERNAL":50,"./handlers":52,"./promise":54}],58:[function(_dereq_,module,exports){
+},{"./INTERNAL":53,"./handlers":55,"./promise":57}],61:[function(_dereq_,module,exports){
 'use strict';
 
 var Promise = _dereq_('./promise');
@@ -6461,7 +6804,7 @@ function resolve(value) {
       return EMPTYSTRING;
   }
 }
-},{"./INTERNAL":50,"./handlers":52,"./promise":54}],59:[function(_dereq_,module,exports){
+},{"./INTERNAL":53,"./handlers":55,"./promise":57}],62:[function(_dereq_,module,exports){
 'use strict';
 var handlers = _dereq_('./handlers');
 var tryCatch = _dereq_('./tryCatch');
@@ -6494,14 +6837,14 @@ function safelyResolveThenable(self, thenable) {
   }
 }
 exports.safely = safelyResolveThenable;
-},{"./handlers":52,"./tryCatch":61}],60:[function(_dereq_,module,exports){
+},{"./handlers":55,"./tryCatch":64}],63:[function(_dereq_,module,exports){
 // Lazy man's symbols for states
 
 exports.REJECTED = ['REJECTED'];
 exports.FULFILLED = ['FULFILLED'];
 exports.PENDING = ['PENDING'];
 
-},{}],61:[function(_dereq_,module,exports){
+},{}],64:[function(_dereq_,module,exports){
 'use strict';
 
 module.exports = tryCatch;
@@ -6517,7 +6860,7 @@ function tryCatch(func, value) {
   }
   return out;
 }
-},{}],62:[function(_dereq_,module,exports){
+},{}],65:[function(_dereq_,module,exports){
 'use strict';
 
 var immediate = _dereq_('immediate');
@@ -6539,7 +6882,7 @@ function unwrap(promise, func, value) {
     }
   });
 }
-},{"./handlers":52,"immediate":46}],63:[function(_dereq_,module,exports){
+},{"./handlers":55,"immediate":49}],66:[function(_dereq_,module,exports){
 /**
  * Helpers.
  */
@@ -6693,10 +7036,10 @@ function plural(ms, n, name) {
   return Math.ceil(ms / n) + ' ' + name + 's';
 }
 
-},{}],64:[function(_dereq_,module,exports){
+},{}],67:[function(_dereq_,module,exports){
 module.exports = typeof Promise === 'function' ? Promise : _dereq_('lie');
 
-},{"lie":53}],65:[function(_dereq_,module,exports){
+},{"lie":56}],68:[function(_dereq_,module,exports){
 (function (global){
 /**
  * JSON parse.
@@ -6731,7 +7074,7 @@ module.exports = function parsejson(data) {
   }
 };
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],66:[function(_dereq_,module,exports){
+},{}],69:[function(_dereq_,module,exports){
 /**
  * Compiles a querystring
  * Returns string representation of the object
@@ -6770,7 +7113,7 @@ exports.decode = function(qs){
   return qry;
 };
 
-},{}],67:[function(_dereq_,module,exports){
+},{}],70:[function(_dereq_,module,exports){
 /**
  * Parses an URI
  *
@@ -6811,7 +7154,7 @@ module.exports = function parseuri(str) {
     return uri;
 };
 
-},{}],68:[function(_dereq_,module,exports){
+},{}],71:[function(_dereq_,module,exports){
 (function (global){
 "use strict";
 
@@ -6903,7 +7246,7 @@ module.exports = {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],69:[function(_dereq_,module,exports){
+},{}],72:[function(_dereq_,module,exports){
 'use strict';
 
 function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
@@ -6915,7 +7258,7 @@ var PouchPromise = typeof Promise === 'function' ? Promise : lie;
 
 module.exports = PouchPromise;
 
-},{"lie":70}],70:[function(_dereq_,module,exports){
+},{"lie":73}],73:[function(_dereq_,module,exports){
 'use strict';
 var immediate = _dereq_('immediate');
 
@@ -7170,7 +7513,7 @@ function race(iterable) {
   }
 }
 
-},{"immediate":46}],71:[function(_dereq_,module,exports){
+},{"immediate":49}],74:[function(_dereq_,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -7230,7 +7573,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],72:[function(_dereq_,module,exports){
+},{}],75:[function(_dereq_,module,exports){
 (function (global){
 /*! https://mths.be/wtf8 v1.0.0 by @mathias */
 ;(function(root) {
@@ -7468,7 +7811,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],73:[function(_dereq_,module,exports){
+},{}],76:[function(_dereq_,module,exports){
 'use strict';
 
 var alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'.split('')
