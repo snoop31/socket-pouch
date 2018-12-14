@@ -632,6 +632,11 @@ function SocketPouch(opts, callback) {
   api._changes = function (opts) {
     opts = utils.clone(opts);
 
+    if (opts.selector) {
+      // set this automagically for the user, similar to above
+      opts.filter = '_selector';
+    }
+
     if (opts.continuous) {
       var messageId = uuid();
       api._changesListeners[messageId] = {
